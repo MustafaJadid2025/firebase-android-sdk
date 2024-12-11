@@ -30,7 +30,10 @@ import com.google.firebase.functions.FirebaseFunctionsException.Code.Companion.f
 import com.google.firebase.functions.FirebaseFunctionsException.Companion.fromResponse
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import java.io.BufferedReader
 import java.io.IOException
+import java.io.InputStream
+import java.io.InputStreamReader
 import java.io.InterruptedIOException
 import java.net.MalformedURLException
 import java.net.URL
@@ -45,9 +48,6 @@ import okhttp3.RequestBody
 import okhttp3.Response
 import org.json.JSONException
 import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.InputStream
-import java.io.InputStreamReader
 
 /** FirebaseFunctions lets you call Cloud Functions for Firebase. */
 public class FirebaseFunctions
@@ -315,32 +315,38 @@ internal constructor(
   }
 
   internal fun stream(
-    name: String, data: Any?, options: HttpsCallOptions, listener: SSETaskListener
+    name: String,
+    data: Any?,
+    options: HttpsCallOptions,
+    listener: SSETaskListener
   ): Task<Void> {
-    return providerInstalled.task.continueWithTask(executor) {
-      contextProvider.getContext(options.limitedUseAppCheckTokens)
-    }.continueWithTask(executor) { task: Task<HttpsCallableContext?> ->
-      if (!task.isSuccessful) {
-        return@continueWithTask Tasks.forException<Void>(task.exception!!)
+    return providerInstalled.task
+      .continueWithTask(executor) { contextProvider.getContext(options.limitedUseAppCheckTokens) }
+      .continueWithTask(executor) { task: Task<HttpsCallableContext?> ->
+        if (!task.isSuccessful) {
+          return@continueWithTask Tasks.forException<Void>(task.exception!!)
+        }
+        val context = task.result
+        val url = getURL(name)
+        stream(url, data, options, context, listener)
       }
-      val context = task.result
-      val url = getURL(name)
-      stream(url, data, options, context, listener)
-    }
   }
 
   internal fun stream(
-    url: URL, data: Any?, options: HttpsCallOptions, listener: SSETaskListener
+    url: URL,
+    data: Any?,
+    options: HttpsCallOptions,
+    listener: SSETaskListener
   ): Task<Void> {
-    return providerInstalled.task.continueWithTask(executor) {
-      contextProvider.getContext(options.limitedUseAppCheckTokens)
-    }.continueWithTask(executor) { task: Task<HttpsCallableContext?> ->
-      if (!task.isSuccessful) {
-        return@continueWithTask Tasks.forException<Void>(task.exception!!)
+    return providerInstalled.task
+      .continueWithTask(executor) { contextProvider.getContext(options.limitedUseAppCheckTokens) }
+      .continueWithTask(executor) { task: Task<HttpsCallableContext?> ->
+        if (!task.isSuccessful) {
+          return@continueWithTask Tasks.forException<Void>(task.exception!!)
+        }
+        val context = task.result
+        stream(url, data, options, context, listener)
       }
-      val context = task.result
-      stream(url, data, options, context, listener)
-    }
   }
 
   private fun stream(
@@ -353,9 +359,7 @@ internal constructor(
     Preconditions.checkNotNull(url, "url cannot be null")
     val tcs = TaskCompletionSource<Void>()
     val callClient = options.apply(client)
-    callClient.postStream(url, tcs, listener) {
-      applyCommonConfiguration(data, context)
-    }
+    callClient.postStream(url, tcs, listener) { applyCommonConfiguration(data, context) }
 
     return tcs.task
   }
@@ -369,67 +373,77 @@ internal constructor(
     val requestBuilder = Request.Builder().url(url)
     requestBuilder.config()
     val call = newCall(requestBuilder.build())
-    call.enqueue(object : Callback {
-      override fun onFailure(ignored: Call, e: IOException) {
-        if (e is InterruptedIOException) {
-          val exception = FirebaseFunctionsException(
-            FirebaseFunctionsException.Code.DEADLINE_EXCEEDED.name,
-            FirebaseFunctionsException.Code.DEADLINE_EXCEEDED,
-            null,
-            e
-          )
-          tcs.setException(exception)
-        } else {
-          val exception = FirebaseFunctionsException(
-            FirebaseFunctionsException.Code.INTERNAL.name,
-            FirebaseFunctionsException.Code.INTERNAL,
-            null,
-            e
-          )
-          tcs.setException(exception)
-        }
-      }
-
-      @Throws(IOException::class)
-      override fun onResponse(ignored: Call, response: Response) {
-        val code = fromHttpStatus(response.code())
-        val bodyAsString = response.body()!!.string()
-        val exception = fromResponse(code, bodyAsString, serializer)
-        if (exception != null) {
-          tcs.setException(exception)
-          return
-        }
-        val bodyAsJson: JSONObject = try {
-          JSONObject(bodyAsString)
-        } catch (je: JSONException) {
-          val e: Exception = FirebaseFunctionsException(
-            "Response is not valid JSON object.", FirebaseFunctionsException.Code.INTERNAL, null, je
-          )
-          tcs.setException(e)
-          return
-        }
-        var dataJSON = bodyAsJson.opt("data")
-        // TODO: Allow "result" instead of "data" for now, for backwards compatibility.
-        if (dataJSON == null) {
-          dataJSON = bodyAsJson.opt("result")
-        }
-        if (dataJSON == null) {
-          val e: Exception = FirebaseFunctionsException(
-            "Response is missing data field.", FirebaseFunctionsException.Code.INTERNAL, null
-          )
-          tcs.setException(e)
-          return
+    call.enqueue(
+      object : Callback {
+        override fun onFailure(ignored: Call, e: IOException) {
+          if (e is InterruptedIOException) {
+            val exception =
+              FirebaseFunctionsException(
+                FirebaseFunctionsException.Code.DEADLINE_EXCEEDED.name,
+                FirebaseFunctionsException.Code.DEADLINE_EXCEEDED,
+                null,
+                e
+              )
+            tcs.setException(exception)
+          } else {
+            val exception =
+              FirebaseFunctionsException(
+                FirebaseFunctionsException.Code.INTERNAL.name,
+                FirebaseFunctionsException.Code.INTERNAL,
+                null,
+                e
+              )
+            tcs.setException(exception)
+          }
         }
 
-        processSSEStream(response.body()!!.byteStream(), serializer, listener)
-        tcs.setResult(null)
+        @Throws(IOException::class)
+        override fun onResponse(ignored: Call, response: Response) {
+          val code = fromHttpStatus(response.code())
+          val bodyAsString = response.body()!!.string()
+          val exception = fromResponse(code, bodyAsString, serializer)
+          if (exception != null) {
+            tcs.setException(exception)
+            return
+          }
+          val bodyAsJson: JSONObject =
+            try {
+              JSONObject(bodyAsString)
+            } catch (je: JSONException) {
+              val e: Exception =
+                FirebaseFunctionsException(
+                  "Response is not valid JSON object.",
+                  FirebaseFunctionsException.Code.INTERNAL,
+                  null,
+                  je
+                )
+              tcs.setException(e)
+              return
+            }
+          var dataJSON = bodyAsJson.opt("data")
+          // TODO: Allow "result" instead of "data" for now, for backwards compatibility.
+          if (dataJSON == null) {
+            dataJSON = bodyAsJson.opt("result")
+          }
+          if (dataJSON == null) {
+            val e: Exception =
+              FirebaseFunctionsException(
+                "Response is missing data field.",
+                FirebaseFunctionsException.Code.INTERNAL,
+                null
+              )
+            tcs.setException(e)
+            return
+          }
+
+          processSSEStream(response.body()!!.byteStream(), serializer, listener)
+          tcs.setResult(null)
+        }
       }
-    })
+    )
   }
 
-  private fun Request.Builder.applyCommonConfiguration(
-    data: Any?, context: HttpsCallableContext?
-  ) {
+  private fun Request.Builder.applyCommonConfiguration(data: Any?, context: HttpsCallableContext?) {
     val body: MutableMap<String?, Any?> = HashMap()
     val encoded = serializer.encode(data)
     body["data"] = encoded
@@ -452,26 +466,27 @@ internal constructor(
   }
 
   private fun processSSEStream(
-    inputStream: InputStream, serializer: Serializer, listener: SSETaskListener
+    inputStream: InputStream,
+    serializer: Serializer,
+    listener: SSETaskListener
   ) {
     BufferedReader(InputStreamReader(inputStream)).use { reader ->
       reader.lineSequence().forEach { line ->
-        val dataChunk = when {
-          line.startsWith("data:") -> line.removePrefix("data:")
-          line.startsWith("result:") -> line.removePrefix("result:")
-          else -> return@forEach
-        }
+        val dataChunk =
+          when {
+            line.startsWith("data:") -> line.removePrefix("data:")
+            line.startsWith("result:") -> line.removePrefix("result:")
+            else -> return@forEach
+          }
 
         val json = JSONObject(dataChunk)
         when {
-          json.has("message") -> serializer.decode(json.opt("message"))
-            ?.let { listener.onEvent(it) }
-
+          json.has("message") ->
+            serializer.decode(json.opt("message"))?.let { listener.onEvent(it) }
           json.has("error") -> {
             serializer.decode(json.opt("error"))?.let { listener.onError(it) }
             return
           }
-
           json.has("result") -> {
             serializer.decode(json.opt("result"))?.let { listener.onComplete(it) }
             return

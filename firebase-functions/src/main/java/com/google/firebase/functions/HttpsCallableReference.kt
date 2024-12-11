@@ -150,11 +150,12 @@ public class HttpsCallableReference {
    * Auth, an auth token for the user will also be automatically included.
    *
    * Firebase Instance ID sends data to the Firebase backend periodically to collect information
-   * regarding the app instance. To stop this, see [com.google.firebase.iid.FirebaseInstanceId.deleteInstanceId].
-   * It will resume with a new Instance ID the next time you call this method.
+   * regarding the app instance. To stop this, see
+   * [com.google.firebase.iid.FirebaseInstanceId.deleteInstanceId]. It will resume with a new
+   * Instance ID the next time you call this method.
    *
-   * Streaming events are handled by the provided [SSETaskListener], which will receive events
-   * and handle errors and completion notifications.
+   * Streaming events are handled by the provided [SSETaskListener], which will receive events and
+   * handle errors and completion notifications.
    *
    * @param data Parameters to pass to the endpoint.
    * @param listener A listener to handle streaming events, errors, and completion notifications.
@@ -172,7 +173,6 @@ public class HttpsCallableReference {
     }
   }
 
-
   /**
    * Streams data to the specified HTTPS endpoint asynchronously without arguments.
    *
@@ -181,11 +181,12 @@ public class HttpsCallableReference {
    * Auth, an auth token for the user will also be automatically included.
    *
    * Firebase Instance ID sends data to the Firebase backend periodically to collect information
-   * regarding the app instance. To stop this, see [com.google.firebase.iid.FirebaseInstanceId.deleteInstanceId].
-   * It will resume with a new Instance ID the next time you call this method.
+   * regarding the app instance. To stop this, see
+   * [com.google.firebase.iid.FirebaseInstanceId.deleteInstanceId]. It will resume with a new
+   * Instance ID the next time you call this method.
    *
-   * Streaming events are handled by the provided [SSETaskListener], which will receive events
-   * and handle errors and completion notifications.
+   * Streaming events are handled by the provided [SSETaskListener], which will receive events and
+   * handle errors and completion notifications.
    *
    * If the returned task fails, the exception will be one of the following types:
    *
@@ -206,7 +207,6 @@ public class HttpsCallableReference {
       functionsClient.stream(url!!, null, options, listener)
     }
   }
-
 
   /**
    * Changes the timeout for calls from this instance of Functions. The default is 60 seconds.
